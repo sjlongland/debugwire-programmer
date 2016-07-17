@@ -1,8 +1,8 @@
-#ifndef _PROTOCOL_INTERFACE_H
-#define _PROTOCOL_INTERFACE_H
+#ifndef _PROTOCOL_DELIMITER_H
+#define _PROTOCOL_DELIMITER_H
 
 /*!
- * JTAGICE mkII Protocol library interface.
+ * JTAGICE mkII Protocol delimiters.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,29 +20,8 @@
  * 02110-1301 USA
  */
 
-#include <stdint.h>
-#include "util/fifo.h"
-
-/* External FIFO to host UART */
-extern struct fifo_t proto_host_uart_rx, proto_host_uart_tx;
-
-/*! External FIFO to target UART */
-extern struct fifo_t proto_target_uart_rx, proto_target_uart_tx;
-
-/*! Initialise the protocol handler */
-void proto_init();
-
-/*! Handle the internal tick counter */
-void proto_tick();
-
-/*!
- * Set the target baud rate: this needs to be implemented by the
- * application.
- *
- * @param[in]	rate	Baud rate in bps
- * @retval	0	Success
- * @retval	<0	Error setting baud rate.
- */
-extern void proto_target_baud(uint32_t rate);
+/* AVR067 Table 4-1 */
+#define PROTO_DELIM_START	(27u)	/*!< Start delimiter */
+#define PROTO_DELIM_TOKEN	(14u)	/*!< Token delimiter */
 
 #endif
