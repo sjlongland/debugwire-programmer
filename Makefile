@@ -21,6 +21,7 @@ TARGET       = leodebug
 SRC          = $(wildcard *.c) \
 	       $(wildcard protocol/*.c) \
 	       $(wildcard util/*.c) \
+	       $(wildcard hardware/*.c) \
 	       $(LUFA_SRC_USB) $(LUFA_SRC_USBCLASS)
 LUFA_PATH    = ./thirdparty/lufa/LUFA
 CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/
