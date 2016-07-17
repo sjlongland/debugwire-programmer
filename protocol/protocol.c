@@ -20,3 +20,9 @@ void proto_init() {
 void proto_tick() {
 	timer_tick(&state.timer);
 }
+
+static void host_rx_evth(struct fifo_t* const fifo, uint8_t events) {
+}
+
+static void target_rx_evth(struct fifo_t* const fifo, uint8_t events) {
+}
