@@ -17,8 +17,11 @@ BOARD        = USER
 F_CPU        = 16000000
 F_USB        = $(F_CPU)
 OPTIMIZATION = s
-TARGET       = VirtualSerial
-SRC          = $(TARGET).c Descriptors.c $(LUFA_SRC_USB) $(LUFA_SRC_USBCLASS)
+TARGET       = leodebug
+SRC          = $(wildcard *.c) \
+	       $(wildcard protocol/*.c) \
+	       $(wildcard util/*.c) \
+	       $(LUFA_SRC_USB) $(LUFA_SRC_USBCLASS)
 LUFA_PATH    = ./thirdparty/lufa/LUFA
 CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -IConfig/
 LD_FLAGS     =

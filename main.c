@@ -34,7 +34,7 @@
  *  the demo and is responsible for the initial application hardware configuration.
  */
 
-#include "VirtualSerial.h"
+#include "main.h"
 
 /** LUFA CDC Class driver interface configuration and state information. This structure is
  *  passed to all CDC Class driver functions, so that multiple instances of the same class
