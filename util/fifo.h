@@ -23,16 +23,33 @@
 #include <stdint.h>
 
 /*!
+ * Empty event.  Indicates that the buffer is now empty and the next read
+ * will generate an underrun.
+ */
+#define FIFO_EVT_EMPTY		(1 << 0)
+
+/*!
  * Underrun event flag, indicates that the consumer tried to read when the
  * buffer was empty.
  */
-#define FIFO_EVT_UNDERRUN	(1 << 0)
+#define FIFO_EVT_UNDERRUN	(1 << 1)
+
+/*!
+ * Data arrived event.  Indicates that new data has arrived.
+ */
+#define FIFO_EVT_NEW		(1 << 2)
+
+/*!
+ * Buffer full event.  Indicates that the buffer is now full and the next
+ * write will generate an overrun.
+ */
+#define FIFO_EVT_FULL		(1 << 3)
 
 /*!
  * Overrun event flag, indicates that the producer tried to write when the
  * buffer was full.
  */
-#define FIFO_EVT_OVERRUN	(1 << 1)
+#define FIFO_EVT_OVERRUN	(1 << 4)
 
 /*!
  * FIFO Buffer interface.
@@ -99,6 +116,8 @@ static int16_t fifo_read_one(struct fifo_t* const fifo) {
 	uint8_t byte = fifo->buffer[fifo->read_ptr];
 	fifo->stored_sz--;
 	fifo->read_ptr = (fifo->read_ptr + 1) % fifo->total_sz;
+	if (!fifo->stored_sz)
+		fifo_exec(fifo, FIFO_EVT_EMPTY);
 	return byte;
 }
 
@@ -115,6 +134,12 @@ static uint8_t fifo_write_one(struct fifo_t* const fifo, uint8_t byte) {
 	fifo->buffer[fifo->write_ptr] = byte;
 	fifo->stored_sz++;
 	fifo->write_ptr = (fifo->write_ptr + 1) % fifo->total_sz;
+
+	if (fifo->stored_sz)
+		fifo_exec(fifo, FIFO_EVT_NEW);
+
+	if (fifo->stored_sz == fifo->total_sz)
+		fifo_exec(fifo, FIFO_EVT_FULL);
 	return 1;
 }
 
