@@ -21,22 +21,16 @@
  */
 
 #include <stdint.h>
+#include "util/fifo.h"
+
+/*! External pointer to host UART */
+extern struct fifo_t proto_host_uart;
+
+/*! External pointer to target UART */
+extern struct fifo_t proto_target_uart;
 
 /*! Handle the internal tick counter */
 void proto_tick();
-
-/*! Process incoming data from the USB host */
-void proto_host_rx(const uint8_t* buffer, uint8_t sz);
-
-/*!
- * Write data to the USB host: this needs to be implemented by the
- * application.
- * @param[in]	buffer	Pointer to buffer to be sent to the host.
- * @param[in]	sz	Number of bytes to send to the host.
- * @retval	>0	Number of bytes sent to the host.
- * @retval	<=0	Error state.
- */
-int16_t proto_host_tx(const uint8_t* buffer, uint8_t sz);
 
 /*!
  * Set the target baud rate: this needs to be implemented by the
@@ -46,19 +40,6 @@ int16_t proto_host_tx(const uint8_t* buffer, uint8_t sz);
  * @retval	0	Success
  * @retval	<0	Error setting baud rate.
  */
-void proto_target_baud(uint32_t rate);
-
-/*! Process incoming data from the target */
-void proto_target_rx(const uint8_t* buffer, uint8_t sz);
-
-/*!
- * Write data to the target: this needs to be implemented by the
- * application.
- * @param[in]	buffer	Pointer to buffer to be sent to the host.
- * @param[in]	sz	Number of bytes to send to the host.
- * @retval	>0	Number of bytes sent to the host.
- * @retval	<=0	Error state.
- */
-int16_t proto_target_tx(const uint8_t* buffer, uint8_t sz);
+extern void proto_target_baud(uint32_t rate);
 
 #endif
