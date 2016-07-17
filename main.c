@@ -1,44 +1,31 @@
-/*
-             LUFA Library
-     Copyright (C) Dean Camera, 2016.
-
-  dean [at] fourwalledcubicle [dot] com
-           www.lufa-lib.org
-*/
-
-/*
-  Copyright 2016  Dean Camera (dean [at] fourwalledcubicle [dot] com)
-
-  Permission to use, copy, modify, distribute, and sell this
-  software and its documentation for any purpose is hereby granted
-  without fee, provided that the above copyright notice appear in
-  all copies and that both that the copyright notice and this
-  permission notice and warranty disclaimer appear in supporting
-  documentation, and that the name of the author not be used in
-  advertising or publicity pertaining to distribution of the
-  software without specific, written prior permission.
-
-  The author disclaims all warranties with regard to this
-  software, including all implied warranties of merchantability
-  and fitness.  In no event shall the author be liable for any
-  special, indirect or consequential damages or any damages
-  whatsoever resulting from loss of use, data or profits, whether
-  in an action of contract, negligence or other tortious action,
-  arising out of or in connection with the use or performance of
-  this software.
-*/
-
-/** \file
+/*!
+ * DebugWire programmer firmware main entrypoint.
  *
- *  Main source file for the VirtualSerial demo. This file contains the main tasks of
- *  the demo and is responsible for the initial application hardware configuration.
+ * (C) Stuart Longland, 2016.
+ * Based on VirtualSerial demo, (C) Dean Camera, 2016.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program (see COPYING); if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ * 02110-1301 USA
  */
 
 #include "main.h"
 
-/** LUFA CDC Class driver interface configuration and state information. This structure is
- *  passed to all CDC Class driver functions, so that multiple instances of the same class
- *  within a device can be differentiated from one another.
+/*!
+ * LUFA CDC Class driver interface configuration and state information. This structure is
+ * passed to all CDC Class driver functions, so that multiple instances of the same class
+ * within a device can be differentiated from one another.
  */
 USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 	{
@@ -66,30 +53,19 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 			},
 	};
 
-/** Standard file stream for the CDC interface when set up, so that the virtual CDC COM port can be
- *  used like any regular character stream in the C APIs.
- */
-static FILE USBSerialStream;
-
-
 /** Main program entry point. This routine contains the overall program flow, including initial
  *  setup of all components and the main program loop.
  */
 int main(void)
 {
 	SetupHardware();
-
-	/* Create a regular character stream for the interface so that it can be used with the stdio.h functions */
-	CDC_Device_CreateStream(&VirtualSerial_CDC_Interface, &USBSerialStream);
-
 	GlobalInterruptEnable();
 
 	for (;;)
 	{
-		fputs("Hello World\r\n", &USBSerialStream);
-		/* Must throw away unused bytes from the host, or it will lock up while waiting for the device */
-		CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-
+		int16_t in = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
+		if (in >= 0)
+			CDC_Device_SendByte(&VirtualSerial_CDC_Interface, in & 0xff);
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 		USB_USBTask();
 	}
