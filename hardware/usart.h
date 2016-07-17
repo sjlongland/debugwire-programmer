@@ -44,9 +44,9 @@
 int8_t usart_init(uint32_t baud, uint16_t mode);
 
 /*! FIFO buffer for USART receive data */
-extern struct fifo_t usart_fifo_rx __attribute__((weak));
+extern struct fifo_t usart_fifo_rx;
 
 /*! FIFO buffer for USART transmit data */
-extern struct fifo_t usart_fifo_tx __attribute__((weak));
+extern struct fifo_t usart_fifo_tx;
 
 #endif
