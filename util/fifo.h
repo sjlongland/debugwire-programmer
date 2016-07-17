@@ -122,6 +122,17 @@ static int16_t fifo_read_one(struct fifo_t* const fifo) {
 }
 
 /*!
+ * Read a byte from the buffer without consuming it.
+ * Returns the byte read, or -1 if no data is available.
+ */
+static int16_t fifo_peek_one(struct fifo_t* const fifo) {
+	if (!fifo->stored_sz)
+		return -1;
+
+	return fifo->buffer[fifo->read_ptr];
+}
+
+/*!
  * Write a byte to the buffer.  Returns 1 on success,
  * 0 if no space available.
  */
@@ -156,6 +167,26 @@ static uint8_t fifo_read(struct fifo_t* const fifo,
 		buffer++;
 		count++;
 		byte = fifo_read_one(fifo);
+	}
+	return count;
+}
+
+/*!
+ * Read bytes from the buffer without consuming them.
+ */
+static uint8_t fifo_peek(struct fifo_t* const fifo,
+		uint8_t* buffer, uint8_t sz) {
+	uint8_t count = 0;
+	uint8_t ptr = fifo->read_ptr;
+	if (sz > fifo->stored_sz)
+		sz = fifo->stored_sz;
+
+	while(sz) {
+		*buffer = fifo->buffer[ptr];
+		sz--;
+		buffer++;
+		count++;
+		ptr = (ptr + 1) % fifo->total_sz;
 	}
 	return count;
 }
