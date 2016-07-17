@@ -21,6 +21,8 @@
  */
 
 #include "main.h"
+#include "util/fifo.h"
+#include "hardware/usart.h"
 
 /*!
  * LUFA CDC Class driver interface configuration and state information. This structure is
@@ -53,11 +55,45 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 			},
 	};
 
-/** Main program entry point. This routine contains the overall program flow, including initial
- *  setup of all components and the main program loop.
+/*
+ * FIFO buffers for target communications.
+ */
+static struct fifo_t target_fifo_rx __attribute__((nocommon));
+static uint8_t target_fifo_rx_buffer[128];
+extern struct fifo_t usart_fifo_rx __attribute__((alias ("target_fifo_rx")));
+extern struct fifo_t proto_target_usart_rx __attribute__((alias ("target_fifo_rx")));
+
+static struct fifo_t target_fifo_tx __attribute__((nocommon));
+static uint8_t target_fifo_tx_buffer[128];
+extern struct fifo_t usart_fifo_tx __attribute__((alias ("target_fifo_tx")));
+extern struct fifo_t proto_target_usart_tx __attribute__((alias ("target_fifo_tx")));
+
+/*
+ * FIFO buffers for host communications.
+ */
+static struct fifo_t host_fifo_rx __attribute__((nocommon));
+static uint8_t host_fifo_rx_buffer[128];
+extern struct fifo_t proto_host_usart_rx __attribute__((alias ("host_fifo_rx")));
+static struct fifo_t host_fifo_tx __attribute__((nocommon));
+static uint8_t host_fifo_tx_buffer[128];
+extern struct fifo_t proto_host_usart_tx __attribute__((alias ("host_fifo_tx")));
+
+/*!
+ * Main program entry point. This routine contains the overall
+ * program flow, including initial setup of all components and the
+ * main program loop.
  */
 int main(void)
 {
+	fifo_init(&target_fifo_rx,
+		target_fifo_rx_buffer, sizeof(target_fifo_rx_buffer));
+	fifo_init(&target_fifo_tx,
+		target_fifo_tx_buffer, sizeof(target_fifo_tx_buffer));
+	fifo_init(&host_fifo_rx,
+		host_fifo_rx_buffer, sizeof(host_fifo_rx_buffer));
+	fifo_init(&host_fifo_tx,
+		host_fifo_tx_buffer, sizeof(host_fifo_tx_buffer));
+
 	SetupHardware();
 	GlobalInterruptEnable();
 
@@ -65,7 +101,15 @@ int main(void)
 	{
 		int16_t in = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
 		if (in >= 0)
-			CDC_Device_SendByte(&VirtualSerial_CDC_Interface, in & 0xff);
+			fifo_write_one(&host_fifo_rx, in);
+
+		in = fifo_read_one(&host_fifo_rx);
+		if (in >= 0)
+			fifo_write_one(&target_fifo_tx, in);
+
+		in = fifo_read_one(&target_fifo_rx);
+		if (in >= 0)
+			CDC_Device_SendByte(&VirtualSerial_CDC_Interface, in);
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 		USB_USBTask();
 	}
@@ -95,18 +139,27 @@ void SetupHardware(void)
 
 	/* Hardware Initialization */
 	USB_Init();
+	usart_init(9600,
+		USART_MODE_ASYNC | USART_MODE_RXEN | USART_MODE_TXEN
+		| USART_MODE_8DBIT | USART_MODE_NPAR);
 }
 
 /** Event handler for the library USB Connection event. */
 void EVENT_USB_Device_Connect(void)
 {
-	//LEDs_SetAllLEDs(LEDMASK_USB_ENUMERATING);
+	fifo_empty(&target_fifo_tx);
+	fifo_empty(&target_fifo_rx);
+	fifo_empty(&host_fifo_tx);
+	fifo_empty(&host_fifo_rx);
 }
 
 /** Event handler for the library USB Disconnection event. */
 void EVENT_USB_Device_Disconnect(void)
 {
-	//LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
+	fifo_empty(&target_fifo_tx);
+	fifo_empty(&target_fifo_rx);
+	fifo_empty(&host_fifo_tx);
+	fifo_empty(&host_fifo_rx);
 }
 
 /** Event handler for the library USB Configuration Changed event. */
