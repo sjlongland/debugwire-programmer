@@ -95,6 +95,8 @@ int main(void)
 		host_fifo_tx_buffer, sizeof(host_fifo_tx_buffer));
 
 	SetupHardware();
+	proto_init();
+
 	GlobalInterruptEnable();
 
 	for (;;)
@@ -139,7 +141,10 @@ void SetupHardware(void)
 
 	/* Hardware Initialization */
 	USB_Init();
-	usart_init(9600,
+}
+
+void proto_target_baud(uint32_t rate) {
+	usart_init(rate,
 		USART_MODE_ASYNC | USART_MODE_RXEN | USART_MODE_TXEN
 		| USART_MODE_8DBIT | USART_MODE_NPAR);
 }
