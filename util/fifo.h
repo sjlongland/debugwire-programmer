@@ -23,15 +23,49 @@
 #include <stdint.h>
 
 /*!
+ * Underrun event flag, indicates that the consumer tried to read when the
+ * buffer was empty.
+ */
+#define FIFO_EVT_UNDERRUN	(1 << 0)
+
+/*!
+ * Overrun event flag, indicates that the producer tried to write when the
+ * buffer was full.
+ */
+#define FIFO_EVT_OVERRUN	(1 << 1)
+
+/*!
  * FIFO Buffer interface.
  */
 struct fifo_t {
-	uint8_t* const buffer;	/*!< Buffer storage location */
+	/*! FIFO producer event handler */
+	void (*producer_evth)(struct fifo_t* const fifo, uint8_t events);
+
+	/*! FIFO consumer event handler */
+	void (*consumer_evth)(struct fifo_t* const fifo, uint8_t events);
+
+	uint8_t* buffer;	/*!< Buffer storage location */
 	uint8_t	total_sz;	/*!< Buffer total size */
 	uint8_t stored_sz;	/*!< Buffer usage size */
 	uint8_t read_ptr;	/*!< Read pointer location */
 	uint8_t write_ptr;	/*!< Write pointer location */
+
+	uint8_t producer_evtm;	/*!< Producer event mask */
+	uint8_t consumer_evtm;	/*!< Consumer event mask */
+
+	void* producer_data;	/*!< Producer data pointer */
+	void* consumer_data;	/*!< Consumer data pointer */
 };
+
+/*!
+ * Execute one or more FIFO events.
+ */
+static void fifo_exec(struct fifo_t* const fifo, uint8_t events) {
+	if (fifo->producer_evth && (fifo->producer_evtm & events))
+		fifo->producer_evth(fifo, events);
+	if (fifo->consumer_evth && (fifo->consumer_evtm & events))
+		fifo->consumer_evth(fifo, events);
+}
 
 /*!
  * Empty the buffer.
@@ -57,8 +91,10 @@ static void fifo_init(struct fifo_t* const fifo,
  * data is available.
  */
 static int16_t fifo_read_one(struct fifo_t* const fifo) {
-	if (!fifo->stored_sz)
+	if (!fifo->stored_sz) {
+		fifo_exec(fifo, FIFO_EVT_UNDERRUN);
 		return -1;
+	}
 
 	uint8_t byte = fifo->buffer[fifo->read_ptr];
 	fifo->stored_sz--;
@@ -71,8 +107,10 @@ static int16_t fifo_read_one(struct fifo_t* const fifo) {
  * 0 if no space available.
  */
 static uint8_t fifo_write_one(struct fifo_t* const fifo, uint8_t byte) {
-	if (fifo->stored_sz >= fifo->total_sz)
+	if (fifo->stored_sz >= fifo->total_sz) {
+		fifo_exec(fifo, FIFO_EVT_OVERRUN);
 		return 0;
+	}
 
 	fifo->buffer[fifo->write_ptr] = byte;
 	fifo->stored_sz++;
@@ -86,6 +124,7 @@ static uint8_t fifo_write_one(struct fifo_t* const fifo, uint8_t byte) {
 static uint8_t fifo_read(struct fifo_t* const fifo,
 		uint8_t* buffer, uint8_t sz) {
 	uint8_t count = 0;
+	int16_t byte = fifo_read_one(fifo);
 	while(sz && (byte >= 0)) {
 		*buffer = byte;
 		sz--;
