@@ -61,22 +61,22 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 static struct fifo_t target_fifo_rx __attribute__((nocommon));
 static uint8_t target_fifo_rx_buffer[128];
 extern struct fifo_t usart_fifo_rx __attribute__((alias ("target_fifo_rx")));
-extern struct fifo_t proto_target_usart_rx __attribute__((alias ("target_fifo_rx")));
+extern struct fifo_t proto_target_uart_rx __attribute__((alias ("target_fifo_rx")));
 
 static struct fifo_t target_fifo_tx __attribute__((nocommon));
 static uint8_t target_fifo_tx_buffer[128];
 extern struct fifo_t usart_fifo_tx __attribute__((alias ("target_fifo_tx")));
-extern struct fifo_t proto_target_usart_tx __attribute__((alias ("target_fifo_tx")));
+extern struct fifo_t proto_target_uart_tx __attribute__((alias ("target_fifo_tx")));
 
 /*
  * FIFO buffers for host communications.
  */
 static struct fifo_t host_fifo_rx __attribute__((nocommon));
 static uint8_t host_fifo_rx_buffer[128];
-extern struct fifo_t proto_host_usart_rx __attribute__((alias ("host_fifo_rx")));
+extern struct fifo_t proto_host_uart_rx __attribute__((alias ("host_fifo_rx")));
 static struct fifo_t host_fifo_tx __attribute__((nocommon));
 static uint8_t host_fifo_tx_buffer[128];
-extern struct fifo_t proto_host_usart_tx __attribute__((alias ("host_fifo_tx")));
+extern struct fifo_t proto_host_uart_tx __attribute__((alias ("host_fifo_tx")));
 
 /*!
  * Main program entry point. This routine contains the overall

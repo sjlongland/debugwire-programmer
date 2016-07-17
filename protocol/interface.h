@@ -23,11 +23,11 @@
 #include <stdint.h>
 #include "util/fifo.h"
 
-/*! External pointer to host UART */
-extern struct fifo_t proto_host_uart;
+/* External FIFO to host UART */
+extern struct fifo_t proto_host_uart_rx, proto_host_uart_tx;
 
-/*! External pointer to target UART */
-extern struct fifo_t proto_target_uart;
+/*! External FIFO to target UART */
+extern struct fifo_t proto_target_uart_rx, proto_target_uart_tx;
 
 /*! Handle the internal tick counter */
 void proto_tick();
