@@ -96,12 +96,19 @@ static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events) {
 static void usart_send_next() {
 	/* Ready to send next byte */
 	int16_t byte = fifo_read_one(&usart_fifo_tx);
-	if (byte >= 0)
+	if (byte >= 0) {
 		UDR1 = byte;
+		if (&usart_led_tx)
+			led_pulse(&usart_led_tx, LED_ACT_ON,
+					usart_led_delay, LED_ACT_OFF, 0);
+	}
 }
 
 ISR(USART1_RX_vect) {
 	fifo_write_one(&usart_fifo_rx, UDR1);
+	if (&usart_led_rx)
+		led_pulse(&usart_led_rx, LED_ACT_ON,
+				usart_led_delay, LED_ACT_OFF, 0);
 }
 ISR(USART1_TX_vect) {
 	usart_send_next();

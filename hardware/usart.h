@@ -22,6 +22,7 @@
 
 #include <stdint.h>
 #include "util/fifo.h"
+#include "util/led.h"
 
 #define USART_MODE_ASYNC	(0 << 14) /*!< USART async mode */
 #define USART_MODE_SYNCS	(1 << 14) /*!< USART sync slave mode */
@@ -48,5 +49,14 @@ extern struct fifo_t usart_fifo_rx;
 
 /*! FIFO buffer for USART transmit data */
 extern struct fifo_t usart_fifo_tx;
+
+/*! Optional LED receive indicator */
+extern struct led_t __attribute__((weak)) usart_led_tx;
+
+/*! Optional LED transmit indicator */
+extern struct led_t __attribute__((weak)) usart_led_rx;
+
+/*! Optional LED blink delay */
+extern const uint8_t __attribute__((weak)) usart_led_delay;
 
 #endif
