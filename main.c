@@ -25,6 +25,7 @@
 #include "hardware/led.h"
 #include "hardware/usart.h"
 
+#ifndef DEBUG_CONSOLE
 /*!
  * LUFA CDC Class driver interface configuration and state information. This structure is
  * passed to all CDC Class driver functions, so that multiple instances of the same class
@@ -55,6 +56,61 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 					},
 			},
 	};
+#else
+USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
+	{
+		.Config =
+			{
+				.ControlInterfaceNumber   = INTERFACE_ID_CDC1_CCI,
+				.DataINEndpoint           =
+					{
+						.Address          = CDC1_TX_EPADDR,
+						.Size             = CDC_TXRX_EPSIZE,
+						.Banks            = 1,
+					},
+				.DataOUTEndpoint =
+					{
+						.Address          = CDC1_RX_EPADDR,
+						.Size             = CDC_TXRX_EPSIZE,
+						.Banks            = 1,
+					},
+				.NotificationEndpoint =
+					{
+						.Address          = CDC1_NOTIFICATION_EPADDR,
+						.Size             = CDC_NOTIFICATION_EPSIZE,
+						.Banks            = 1,
+					},
+			},
+	};
+
+USB_ClassInfo_CDC_Device_t debug_console_cdc =
+	{
+		.Config =
+			{
+				.ControlInterfaceNumber   = INTERFACE_ID_CDC2_CCI,
+				.DataINEndpoint           =
+					{
+						.Address          = CDC2_TX_EPADDR,
+						.Size             = CDC_TXRX_EPSIZE,
+						.Banks            = 1,
+					},
+				.DataOUTEndpoint =
+					{
+						.Address          = CDC2_RX_EPADDR,
+						.Size             = CDC_TXRX_EPSIZE,
+						.Banks            = 1,
+					},
+				.NotificationEndpoint =
+					{
+						.Address          = CDC2_NOTIFICATION_EPADDR,
+						.Size             = CDC_NOTIFICATION_EPSIZE,
+						.Banks            = 1,
+					},
+
+			},
+	};
+uint8_t debug_console_ready = 0;
+#endif
 
 /* LEDs */
 static struct led_t led1_r __attribute__((nocommon));
@@ -134,6 +190,12 @@ int main(void)
 			led_pulse(&led1_g, LED_ACT_OFF, 50, LED_ACT_ON, 0);
 			fifo_write_one(&host_fifo_rx, in);
 		}
+#ifdef DEBUG_CONSOLE
+		/* Read and echo back */
+		in = CDC_Device_ReceiveByte(&debug_console_cdc);
+		if ((in >= 0) && debug_console_ready)
+			CDC_Device_SendByte(&debug_console_cdc, in);
+#endif
 
 		in = fifo_read_one(&host_fifo_rx);
 		if (in >= 0) {
@@ -152,6 +214,9 @@ int main(void)
 			CDC_Device_SendByte(&VirtualSerial_CDC_Interface, in);
 		}
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
+#ifdef DEBUG_CONSOLE
+		CDC_Device_USBTask(&debug_console_cdc);
+#endif
 		USB_USBTask();
 	}
 }
@@ -232,12 +297,18 @@ void EVENT_USB_Device_Disconnect(void)
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
 	CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
+#ifdef DEBUG_CONSOLE
+	CDC_Device_ConfigureEndpoints(&debug_console_cdc);
+#endif
 }
 
 /** Event handler for the library USB Control Request reception event. */
 void EVENT_USB_Device_ControlRequest(void)
 {
 	CDC_Device_ProcessControlRequest(&VirtualSerial_CDC_Interface);
+#ifdef DEBUG_CONSOLE
+	CDC_Device_ProcessControlRequest(&debug_console_cdc);
+#endif
 }
 
 /** CDC class driver callback function the processing of changes to the virtual
@@ -254,6 +325,11 @@ void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const C
 	   in the pending data from the USB endpoints.
 	*/
 	bool HostReady = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR) != 0;
+#ifdef DEBUG_CONSOLE
+	if (CDCInterfaceInfo == &debug_console_cdc) {
+		debug_console_ready = HostReady ? 1 : 0;
+	}
+#endif
 }
 
 ISR(TIMER1_OVF_vect) {
