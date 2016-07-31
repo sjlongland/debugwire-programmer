@@ -38,6 +38,7 @@
 #define USART_MODE_NPAR		(0 <<  5) /*!< No parity */
 #define USART_MODE_OPAR		(2 <<  5) /*!< Odd parity */
 #define USART_MODE_EPAR		(3 <<  5) /*!< Even parity */
+#define USART_MODE_HDUPLEX	(1 <<  0) /*!< Half-duplex mode */
 
 /*!
  * Initialise USART

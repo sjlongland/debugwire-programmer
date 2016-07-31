@@ -32,8 +32,51 @@
 #define UBRR_ERR(f_cpu, div, baud)	\
 	(((f_cpu) * (div)) - (baud))
 
+/*! Duplex control state register */
+static uint8_t usart_duplex = 0;
+#define DUPLEX_RX_EN		(1 << 0)	/*!< Receiver enabled */
+#define DUPLEX_TX_EN		(1 << 1)	/*!< Transmitter enabled */
+#define DUPLEX_STATE_OFF	(0 << 2)	/*!< Transceiver offline */
+#define DUPLEX_STATE_RX		(1 << 2)	/*!< Receive mode */
+#define DUPLEX_STATE_TX		(2 << 2)	/*!< Transmit mode */
+#define DUPLEX_STATE_FULL	(3 << 2)	/*!< Full duplex */
+
+/*! Duplex direction enable bit mask */
+#define DUPLEX_EN_MASK		(DUPLEX_RX_EN|DUPLEX_TX_EN)
+/*! Duplex direction state bit mask */
+#define DUPLEX_STATE_MASK	(3 << 2)
+
 /*! Handler for transmit data */
 static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events);
+
+#define USART1B_RX		((1 << RXCIE1) | (1 << RXEN1))
+#define USART1B_TX		((1 << TXCIE1) | (1 << TXEN1) \
+					| (1 << UDRIE1))
+
+/*! Update USART direction settings according to usart_duplex */
+static void usart_update_dir() {
+	switch(usart_duplex & DUPLEX_STATE_MASK) {
+		case DUPLEX_STATE_FULL:
+			UCSR1B |= USART1B_RX | USART1B_TX;
+			break;
+		case DUPLEX_STATE_TX:
+			UCSR1B &= ~USART1B_RX;
+			UCSR1B |= USART1B_TX;
+			break;
+		case DUPLEX_STATE_RX:
+			UCSR1B &= ~USART1B_TX;
+			UCSR1B |= USART1B_RX;
+			break;
+		default:
+			UCSR1B &= ~(USART1B_RX | USART1B_TX);
+	}
+}
+/*! Set the new USART direction */
+static void usart_set_dir(uint8_t dir) {
+	usart_duplex	= (usart_duplex & ~DUPLEX_STATE_MASK)
+			| (dir & DUPLEX_STATE_MASK);
+	usart_update_dir();
+}
 
 /*!
  * Initialise USART
@@ -64,6 +107,18 @@ int8_t usart_init(uint32_t baud, uint16_t mode) {
 	/* Shut everything down first */
 	UCSR1B = 0;
 
+	/* Figure out the duplex settings */
+	usart_duplex 	= ((mode & USART_MODE_RXEN) ? DUPLEX_RX_EN : 0)
+			| ((mode & USART_MODE_TXEN) ? DUPLEX_TX_EN : 0);
+	/* Are we in half-duplex mode? */
+	if (mode & USART_MODE_HDUPLEX) {
+		/* We are, so assume we're in receive first up */
+		usart_duplex |= DUPLEX_STATE_RX;
+	} else {
+		/* Set the bits according to user selection */
+		usart_duplex |= (usart_duplex & DUPLEX_EN_MASK) << 2;
+	}
+
 	/* Set up IO pins */
 	DDRD &= ~(1 << 2);	/* PD2 == RX; input */
 	DDRD |= (1 << 3);	/* PD3 == TX; output */
@@ -76,13 +131,8 @@ int8_t usart_init(uint32_t baud, uint16_t mode) {
 
 	UBRR1 = (ubrr_div16) ? ubrr_div16 : ubrr_div8;
 	UCSR1A = (ubrr_div16) ? 0 : U2X1;
-	UCSR1B |= ((mode & USART_MODE_RXEN) /* Receive settings */
-			? ((1 << RXCIE1) | (1 << RXEN1))
-			: 0)
-		| ((mode & USART_MODE_TXEN) /* Transmit settings */
-			? ((1 << TXCIE1) | (1 << TXEN1) | (1 << UDRIE1))
-			: 0)
-		| (((mode >> 11) & 0x01) << UCSZ12);
+	UCSR1B |= ((mode >> 11) & 0x01) << UCSZ12;
+	usart_update_dir();
 
 	/* Set up FIFO handler */
 	usart_fifo_tx.consumer_evth = usart_txfifo_evth;
@@ -98,11 +148,26 @@ static void usart_send_next() {
 		if (&usart_led_tx)
 			led_pulse(&usart_led_tx, LED_ACT_ON,
 					usart_led_delay, LED_ACT_OFF, 0);
+	} else if ((usart_duplex & (DUPLEX_STATE_MASK | DUPLEX_RX_EN))
+			== (DUPLEX_STATE_TX | DUPLEX_RX_EN)) {
+		/*
+		 * No more to send, Rx mode is enabled but we are in Tx
+		 * mode presently.  So go back to Rx mode.
+		 */
+		usart_set_dir(DUPLEX_STATE_RX);
 	}
 }
 
 static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events) {
 	if (events & FIFO_EVT_NEW) {
+		if (!(usart_duplex & DUPLEX_TX_EN)) {
+			/* Not enabled for transmit, silently discard! */
+			fifo_read_one(&usart_fifo_tx);
+			return;
+		} else if ((usart_duplex & DUPLEX_STATE_RX)) {
+			/* We are presently in receive mode. */
+			usart_set_dir(DUPLEX_STATE_TX);
+		}
 		/* Kick the transmit done interrupt */
 		UCSR1A |= (1 << TXC1);
 	}
