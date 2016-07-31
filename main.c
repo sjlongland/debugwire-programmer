@@ -22,6 +22,7 @@
 
 #include "main.h"
 #include "util/fifo.h"
+#include "hardware/led.h"
 #include "hardware/usart.h"
 
 /*!
@@ -55,6 +56,16 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 			},
 	};
 
+/* LEDs */
+static struct led_t led1_r __attribute__((nocommon));
+static struct led_t led1_g __attribute__((nocommon));
+static struct led_t led2_r __attribute__((nocommon));
+extern struct led_t usart_led_tx __attribute__((alias ("led2_r")));
+static struct led_t led2_g __attribute__((nocommon));
+extern struct led_t usart_led_rx __attribute__((alias ("led2_g")));
+static struct led_t led2_b __attribute__((nocommon));
+const uint8_t usart_led_delay = 50;
+
 /*
  * FIFO buffers for target communications.
  */
@@ -78,6 +89,9 @@ static struct fifo_t host_fifo_tx __attribute__((nocommon));
 static uint8_t host_fifo_tx_buffer[128];
 extern struct fifo_t proto_host_uart_tx __attribute__((alias ("host_fifo_tx")));
 
+/* Timer demo */
+struct timer_t demo_timer;
+
 /*!
  * Main program entry point. This routine contains the overall
  * program flow, including initial setup of all components and the
@@ -85,6 +99,14 @@ extern struct fifo_t proto_host_uart_tx __attribute__((alias ("host_fifo_tx")));
  */
 int main(void)
 {
+	led_init(&led1_r, &PORTD, &DDRD, 1 << 5, LED_CFG_INVERT);
+	led_init(&led1_g, &PORTB, &DDRB, 1 << 0, LED_CFG_INVERT);
+	led_init(&led2_r, &PORTC, &DDRC, 1 << 7, 0);
+	led_init(&led2_g, &PORTB, &DDRB, 1 << 5, 0);
+	led_init(&led2_b, &PORTB, &DDRB, 1 << 6, 0);
+
+	led_set_state(&led2_b, LED_ACT_ON);
+
 	fifo_init(&target_fifo_rx,
 		target_fifo_rx_buffer, sizeof(target_fifo_rx_buffer));
 	fifo_init(&target_fifo_tx,
@@ -94,6 +116,11 @@ int main(void)
 	fifo_init(&host_fifo_tx,
 		host_fifo_tx_buffer, sizeof(host_fifo_tx_buffer));
 
+	timer_start(&demo_timer, 100);
+	usart_init(9600, USART_MODE_ASYNC | USART_MODE_RXEN
+			| USART_MODE_TXEN | USART_MODE_8DBIT
+			| USART_MODE_NPAR);
+
 	SetupHardware();
 	proto_init();
 
@@ -102,16 +129,28 @@ int main(void)
 	for (;;)
 	{
 		int16_t in = CDC_Device_ReceiveByte(&VirtualSerial_CDC_Interface);
-		if (in >= 0)
+		if (in >= 0) {
+			/* Indicate received data from host, push to FIFO */
+			led_pulse(&led1_g, LED_ACT_OFF, 50, LED_ACT_ON, 0);
 			fifo_write_one(&host_fifo_rx, in);
+		}
 
 		in = fifo_read_one(&host_fifo_rx);
-		if (in >= 0)
+		if (in >= 0) {
 			fifo_write_one(&target_fifo_tx, in);
+		}
 
 		in = fifo_read_one(&target_fifo_rx);
-		if (in >= 0)
+		if (in >= 0) {
+			fifo_write_one(&host_fifo_tx, in);
+		}
+
+		in = fifo_read_one(&host_fifo_tx);
+		if (in >= 0) {
+			/* Indicate sent data to host, push to host */
+			led_pulse(&led1_r, LED_ACT_OFF, 50, LED_ACT_ON, 0);
 			CDC_Device_SendByte(&VirtualSerial_CDC_Interface, in);
+		}
 		CDC_Device_USBTask(&VirtualSerial_CDC_Interface);
 		USB_USBTask();
 	}
@@ -141,6 +180,28 @@ void SetupHardware(void)
 
 	/* Hardware Initialization */
 	USB_Init();
+
+	/* Timer1 initialisation */
+	OCR1A =		/* Output Compare Register A = Interrupt frequency */
+			F_CPU / 64 / 100;	/* 100 Hz */
+	TCCR1A =	/* Control Register A */
+			/* OC0A disconnected */
+			(0 << COM1A0)
+			/* OC0B disconnected */
+		|	(0 << COM1B0)
+			/* WGM[3:0] = CTC (0x03); set WGM[1:0] here */
+		|	(2 << WGM00);
+	TCCR1B =	/* Control Register B */
+			/* Disable input noise capture */
+			(0 << ICNC1)
+			/* Input Capture Edge: don't care */
+		|	(0 << ICES1)
+			/* Clear WGM[3:2] */
+		|	(0 << WGM12)
+			/* Clock source: clk_io/64 = 0x03 */
+		|	(3 << CS00);
+	TIMSK1	=	/* Interrupt mask; enable overflow interrupt */
+			(1 << TOIE1);
 }
 
 void proto_target_baud(uint32_t rate) {
@@ -170,11 +231,7 @@ void EVENT_USB_Device_Disconnect(void)
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
-	bool ConfigSuccess = true;
-
-	ConfigSuccess &= CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
-
-	//LEDs_SetAllLEDs(ConfigSuccess ? LEDMASK_USB_READY : LEDMASK_USB_ERROR);
+	CDC_Device_ConfigureEndpoints(&VirtualSerial_CDC_Interface);
 }
 
 /** Event handler for the library USB Control Request reception event. */
@@ -197,4 +254,15 @@ void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const C
 	   in the pending data from the USB endpoints.
 	*/
 	bool HostReady = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR) != 0;
+}
+
+ISR(TIMER1_OVF_vect) {
+	/* Tick the LEDs: TODO: put in timer interrupt */
+	led_tick(&led1_r);
+	led_tick(&led1_g);
+	led_tick(&led2_r);
+	led_tick(&led2_g);
+	led_tick(&led2_b);
+
+	timer_tick(&demo_timer);
 }
