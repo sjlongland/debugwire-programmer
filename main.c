@@ -83,7 +83,7 @@ USB_ClassInfo_CDC_Device_t VirtualSerial_CDC_Interface =
 			},
 	};
 
-USB_ClassInfo_CDC_Device_t debug_console_cdc =
+static USB_ClassInfo_CDC_Device_t debug_console_cdc =
 	{
 		.Config =
 			{
@@ -109,7 +109,10 @@ USB_ClassInfo_CDC_Device_t debug_console_cdc =
 
 			},
 	};
-uint8_t debug_console_ready = 0;
+static uint8_t _debug_console_ready __attribute__((nocommon)) = 0;
+const extern uint8_t debug_console_ready
+	__attribute__((alias ("_debug_console_ready")));;
+FILE debug_stream;
 #endif
 
 /* LEDs */
@@ -179,6 +182,9 @@ int main(void)
 
 	SetupHardware();
 	proto_init();
+#ifdef DEBUG_CONSOLE
+	CDC_Device_CreateBlockingStream(&debug_console_cdc, &debug_stream);
+#endif
 
 	GlobalInterruptEnable();
 
@@ -327,7 +333,7 @@ void EVENT_CDC_Device_ControLineStateChanged(USB_ClassInfo_CDC_Device_t *const C
 	bool HostReady = (CDCInterfaceInfo->State.ControlLineStates.HostToDevice & CDC_CONTROL_LINE_OUT_DTR) != 0;
 #ifdef DEBUG_CONSOLE
 	if (CDCInterfaceInfo == &debug_console_cdc) {
-		debug_console_ready = HostReady ? 1 : 0;
+		_debug_console_ready = HostReady ? 1 : 0;
 	}
 #endif
 }
