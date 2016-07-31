@@ -60,12 +60,12 @@ static void usart_update_dir() {
 			UCSR1B |= USART1B_RX | USART1B_TX;
 			break;
 		case DUPLEX_STATE_TX:
-			UCSR1B &= ~USART1B_RX;
 			UCSR1B |= USART1B_TX;
+			UCSR1B &= ~USART1B_RX;
 			break;
 		case DUPLEX_STATE_RX:
-			UCSR1B &= ~USART1B_TX;
 			UCSR1B |= USART1B_RX;
+			UCSR1B &= ~USART1B_TX;
 			break;
 		default:
 			UCSR1B &= ~(USART1B_RX | USART1B_TX);
@@ -148,13 +148,6 @@ static void usart_send_next() {
 		if (&usart_led_tx)
 			led_pulse(&usart_led_tx, LED_ACT_ON,
 					usart_led_delay, LED_ACT_OFF, 0);
-	} else if ((usart_duplex & (DUPLEX_STATE_MASK | DUPLEX_RX_EN))
-			== (DUPLEX_STATE_TX | DUPLEX_RX_EN)) {
-		/*
-		 * No more to send, Rx mode is enabled but we are in Tx
-		 * mode presently.  So go back to Rx mode.
-		 */
-		usart_set_dir(DUPLEX_STATE_RX);
 	}
 }
 
@@ -183,5 +176,15 @@ ISR(USART1_TX_vect) {
 	usart_send_next();
 }
 ISR(USART1_UDRE_vect) {
-	usart_send_next();
+	if (fifo_peek_one(&usart_fifo_tx)) {
+		/* We've got more */
+		usart_send_next();
+	} else if ((usart_duplex & (DUPLEX_STATE_MASK | DUPLEX_RX_EN))
+			== (DUPLEX_STATE_TX | DUPLEX_RX_EN)) {
+		/*
+		 * No more to send, Rx mode is enabled but we are in Tx
+		 * mode presently.  So go back to Rx mode.
+		 */
+		usart_set_dir(DUPLEX_STATE_RX);
+	}
 }
