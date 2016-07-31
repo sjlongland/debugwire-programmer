@@ -57,6 +57,13 @@ static void timer_start(struct timer_t* const timer, uint8_t counter) {
 }
 
 /*!
+ * Acknowledge the expired flag
+ */
+static void timer_ack(struct timer_t* const timer) {
+	timer->flags &= ~TIMER_FLAG_EXPIRED;
+}
+
+/*!
  * Stop/pause the timer.  Counter is left unchanged.
  */
 static void timer_stop(struct timer_t* const timer) {
