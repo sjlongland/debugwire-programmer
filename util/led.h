@@ -79,13 +79,22 @@ static void led_set_state(const struct led_t* const led,
 }
 
 /*!
+ * Cancel any timers on the LED
+ */
+static void led_stop(struct led_t* const led) {
+	led->period = 0;
+	timer_stop(&(led->timer));
+}
+
+/*!
  * Initialise a LED
  */
 static void led_init(struct led_t* const led, volatile uint8_t* port,
-		uint8_t bit, uint8_t config) {
+		volatile uint8_t* ddr, uint8_t bit, uint8_t config) {
 	memset(led, 0, sizeof(struct led_t));
 	led->port = port;
 	led->bit = bit;
+	*ddr |= bit;
 	led_set_state(led, LED_ACT_OFF);
 }
 
