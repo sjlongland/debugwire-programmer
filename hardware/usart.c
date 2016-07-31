@@ -64,6 +64,10 @@ int8_t usart_init(uint32_t baud, uint16_t mode) {
 	/* Shut everything down first */
 	UCSR1B = 0;
 
+	/* Set up IO pins */
+	DDRD &= ~(1 << 2);	/* PD2 == RX; input */
+	DDRD |= (1 << 3);	/* PD3 == TX; output */
+
 	UCSR1C	= (((mode >> 14) & 0x03) << UMSEL10)	/* USART mode */
 		| (((mode >> 5) & 0x03) << UPM10)	/* Parity mode */
 		| (((mode >> 8) & 0x01) << USBS1)	/* Stop bits */
@@ -86,13 +90,6 @@ int8_t usart_init(uint32_t baud, uint16_t mode) {
 	return 0;
 }
 
-static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events) {
-	if (events & FIFO_EVT_NEW) {
-		/* Kick the transmit done interrupt */
-		UCSR1A |= (1 << TXC1);
-	}
-}
-
 static void usart_send_next() {
 	/* Ready to send next byte */
 	int16_t byte = fifo_read_one(&usart_fifo_tx);
@@ -101,6 +98,13 @@ static void usart_send_next() {
 		if (&usart_led_tx)
 			led_pulse(&usart_led_tx, LED_ACT_ON,
 					usart_led_delay, LED_ACT_OFF, 0);
+	}
+}
+
+static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events) {
+	if (events & FIFO_EVT_NEW) {
+		/* Kick the transmit done interrupt */
+		UCSR1A |= (1 << TXC1);
 	}
 }
 

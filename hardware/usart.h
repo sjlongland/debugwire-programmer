@@ -22,7 +22,7 @@
 
 #include <stdint.h>
 #include "util/fifo.h"
-#include "util/led.h"
+#include "hardware/led.h"
 
 #define USART_MODE_ASYNC	(0 << 14) /*!< USART async mode */
 #define USART_MODE_SYNCS	(1 << 14) /*!< USART sync slave mode */
