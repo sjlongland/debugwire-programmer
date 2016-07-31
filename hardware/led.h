@@ -20,6 +20,7 @@
  * 02110-1301 USA
  */
 
+#include <string.h>
 #include <stdint.h>
 #include "util/timer.h"
 
