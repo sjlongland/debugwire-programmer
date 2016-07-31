@@ -20,6 +20,7 @@
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #include "hardware/usart.h"
+#include "util/debug.h"
 
 #define F_CPU_DIV_8	(F_CPU/8)
 #define F_CPU_DIV_16	(F_CPU/16)
@@ -55,6 +56,14 @@ static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events);
 
 /*! Update USART direction settings according to usart_duplex */
 static void usart_update_dir() {
+#ifdef DEBUG_USART
+	if (debug_console_ready)
+		fprintf(&debug_stream,
+				"%s: state=%02x en=%02x\r\n",
+				__func__,
+				usart_duplex & DUPLEX_STATE_MASK,
+				usart_duplex & DUPLEX_EN_MASK);
+#endif
 	switch(usart_duplex & DUPLEX_STATE_MASK) {
 		case DUPLEX_STATE_FULL:
 			UCSR1B |= USART1B_RX | USART1B_TX;
@@ -112,8 +121,13 @@ int8_t usart_init(uint32_t baud, uint16_t mode) {
 			| ((mode & USART_MODE_TXEN) ? DUPLEX_TX_EN : 0);
 	/* Are we in half-duplex mode? */
 	if (mode & USART_MODE_HDUPLEX) {
-		/* We are, so assume we're in receive first up */
-		usart_duplex |= DUPLEX_STATE_RX;
+		/*
+		 * We are.  If the receiver is enabled, go to receive
+		 * mode, otherwise, turn everything off.
+		 */
+		usart_duplex |= ((usart_duplex & DUPLEX_RX_EN)
+				? DUPLEX_STATE_RX
+				: DUPLEX_STATE_OFF);
 	} else {
 		/* Set the bits according to user selection */
 		usart_duplex |= (usart_duplex & DUPLEX_EN_MASK) << 2;
@@ -157,7 +171,8 @@ static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events) {
 			/* Not enabled for transmit, silently discard! */
 			fifo_read_one(&usart_fifo_tx);
 			return;
-		} else if ((usart_duplex & DUPLEX_STATE_RX)) {
+		} else if ((usart_duplex & DUPLEX_STATE_MASK)
+					== DUPLEX_STATE_RX) {
 			/* We are presently in receive mode. */
 			usart_set_dir(DUPLEX_STATE_TX);
 		}
@@ -179,12 +194,24 @@ ISR(USART1_UDRE_vect) {
 	if (fifo_peek_one(&usart_fifo_tx)) {
 		/* We've got more */
 		usart_send_next();
-	} else if ((usart_duplex & (DUPLEX_STATE_MASK | DUPLEX_RX_EN))
-			== (DUPLEX_STATE_TX | DUPLEX_RX_EN)) {
-		/*
-		 * No more to send, Rx mode is enabled but we are in Tx
-		 * mode presently.  So go back to Rx mode.
-		 */
-		usart_set_dir(DUPLEX_STATE_RX);
+	} else {
+		/* No more to send. */
+		switch (usart_duplex & DUPLEX_STATE_MASK) {
+			case DUPLEX_STATE_FULL:
+				/* We're in full-duplex mode, do nothing */
+				return;
+			case DUPLEX_STATE_TX:
+				/* We're in half-duplex transmit */
+				if (usart_duplex & DUPLEX_RX_EN) {
+					/* Go to receive mode */
+					usart_set_dir(DUPLEX_STATE_RX);
+				} else {
+					/* Turn off transmitter */
+					usart_set_dir(DUPLEX_STATE_OFF);
+				}
+			default:
+				/* Unknown state, turn off */
+				usart_set_dir(DUPLEX_STATE_OFF);
+		}
 	}
 }
