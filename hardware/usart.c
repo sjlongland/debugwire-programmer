@@ -34,7 +34,7 @@
 	(((f_cpu) * (div)) - (baud))
 
 /*! Duplex control state register */
-static uint8_t usart_duplex = 0;
+static volatile uint8_t usart_duplex = 0;
 #define DUPLEX_RX_EN		(1 << 0)	/*!< Receiver enabled */
 #define DUPLEX_TX_EN		(1 << 1)	/*!< Transmitter enabled */
 #define DUPLEX_STATE_OFF	(0 << 2)	/*!< Transceiver offline */
@@ -51,8 +51,7 @@ static uint8_t usart_duplex = 0;
 static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events);
 
 #define USART1B_RX		((1 << RXCIE1) | (1 << RXEN1))
-#define USART1B_TX		((1 << TXCIE1) | (1 << TXEN1) \
-					| (1 << UDRIE1))
+#define USART1B_TX		((1 << UDRIE1) | (1 << TXEN1))
 
 /*! Update USART direction settings according to usart_duplex */
 static void usart_update_dir() {
@@ -80,8 +79,17 @@ static void usart_update_dir() {
 			UCSR1B &= ~(USART1B_RX | USART1B_TX);
 	}
 }
+
 /*! Set the new USART direction */
 static void usart_set_dir(uint8_t dir) {
+#ifdef DEBUG_USART
+	if (debug_console_ready)
+		fprintf(&debug_stream,
+				"%s: to state %02x\r\n",
+				__func__,
+				dir);
+#endif
+
 	usart_duplex	= (usart_duplex & ~DUPLEX_STATE_MASK)
 			| (dir & DUPLEX_STATE_MASK);
 	usart_update_dir();
@@ -98,6 +106,11 @@ int8_t usart_init(uint32_t baud, uint16_t mode) {
 	/* If we have neither option, fail now */
 	if (!ubrr_div16 && !ubrr_div8)
 		return -1;
+
+	/* DEBUG: Use D7/D8 for state */
+	DDRB |= (1 << 4);	/* D8 */
+	DDRE |= (1 << 6);	/* D7 */
+	DDRD |= (1 << 7);	/* D6 */
 
 	/* If we have both options, pick the closest */
 	if (ubrr_div16 && ubrr_div8) {
@@ -166,6 +179,11 @@ static void usart_send_next() {
 }
 
 static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events) {
+#ifdef DEBUG_USART
+	if (debug_console_ready)
+		fprintf(&debug_stream,
+				"USART1_TX_FIFO: Events %02x\r\n", events);
+#endif
 	if (events & FIFO_EVT_NEW) {
 		if (!(usart_duplex & DUPLEX_TX_EN)) {
 			/* Not enabled for transmit, silently discard! */
@@ -176,42 +194,72 @@ static void usart_txfifo_evth(struct fifo_t* const fifo, uint8_t events) {
 			/* We are presently in receive mode. */
 			usart_set_dir(DUPLEX_STATE_TX);
 		}
-		/* Kick the transmit done interrupt */
-		UCSR1A |= (1 << TXC1);
+		/* Kick the buffer empty done interrupt */
+		UCSR1A |= (1 << UDRE1);
 	}
 }
 
 ISR(USART1_RX_vect) {
+#ifdef DEBUG_USART
+	if (debug_console_ready)
+		fprintf(&debug_stream,
+				"USART1_RX\r\n");
+#endif
 	fifo_write_one(&usart_fifo_rx, UDR1);
 	if (&usart_led_rx)
 		led_pulse(&usart_led_rx, LED_ACT_ON,
 				usart_led_delay, LED_ACT_OFF, 0);
 }
+
 ISR(USART1_TX_vect) {
-	usart_send_next();
-}
-ISR(USART1_UDRE_vect) {
-	if (fifo_peek_one(&usart_fifo_tx)) {
+	if (fifo_peek_one(&usart_fifo_tx) >= 0) {
 		/* We've got more */
+#ifdef DEBUG_USART
+		if (debug_console_ready)
+			fprintf(&debug_stream,
+					"USART1_TX: More to send\r\n");
+#endif
 		usart_send_next();
+		/* Turn on UDRE interrupt, turn off TXCIE */
+		UCSR1B &= ~(1 << TXCIE1);
+		UCSR1B |= (1 << UDRIE1);
 	} else {
+		uint8_t state = usart_duplex & DUPLEX_STATE_MASK;
+#if DEBUG_USART
+		if (debug_console_ready)
+			fprintf(&debug_stream,
+				"USART1_TX: End Tx state %02x\r\n", state);
+#endif
 		/* No more to send. */
-		switch (usart_duplex & DUPLEX_STATE_MASK) {
-			case DUPLEX_STATE_FULL:
-				/* We're in full-duplex mode, do nothing */
-				return;
-			case DUPLEX_STATE_TX:
-				/* We're in half-duplex transmit */
-				if (usart_duplex & DUPLEX_RX_EN) {
-					/* Go to receive mode */
-					usart_set_dir(DUPLEX_STATE_RX);
-				} else {
-					/* Turn off transmitter */
-					usart_set_dir(DUPLEX_STATE_OFF);
-				}
-			default:
-				/* Unknown state, turn off */
+		if (state == DUPLEX_STATE_TX) {
+			/* We're in half-duplex transmit */
+			if (usart_duplex & DUPLEX_RX_EN) {
+				/* Go to receive mode */
+#ifdef DEBUG_USART
+				if (debug_console_ready)
+					fprintf(&debug_stream,
+						"USART1_TX: Rx, so Tx->Rx\r\n");
+#endif
+				usart_set_dir(DUPLEX_STATE_RX);
+			} else {
+#ifdef DEBUG_USART
+				if (debug_console_ready)
+					fprintf(&debug_stream,
+						"USART1_TX: No Rx, so Tx->Off\r\n");
+#endif
+				/* Turn off transmitter */
 				usart_set_dir(DUPLEX_STATE_OFF);
+			}
 		}
+	}
+}
+
+ISR(USART1_UDRE_vect) {
+	if (fifo_peek_one(&usart_fifo_tx) >= 0) {
+		usart_send_next();
+	} else if ((usart_duplex & DUPLEX_STATE_MASK) == DUPLEX_STATE_TX) {
+		/* Turn off UDRE interrupt, turn on TXCIE */
+		UCSR1B &= ~(1 << UDRIE1);
+		UCSR1B |= (1 << TXCIE1);
 	}
 }
