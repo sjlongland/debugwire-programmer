@@ -107,11 +107,6 @@ int8_t usart_init(uint32_t baud, uint16_t mode) {
 	if (!ubrr_div16 && !ubrr_div8)
 		return -1;
 
-	/* DEBUG: Use D7/D8 for state */
-	DDRB |= (1 << 4);	/* D8 */
-	DDRE |= (1 << 6);	/* D7 */
-	DDRD |= (1 << 7);	/* D6 */
-
 	/* If we have both options, pick the closest */
 	if (ubrr_div16 && ubrr_div8) {
 		int32_t err_div16 = UBRR_ERR(F_CPU_DIV_16,
