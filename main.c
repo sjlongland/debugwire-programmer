@@ -178,7 +178,7 @@ int main(void)
 	timer_start(&demo_timer, 100);
 	usart_init(9600, USART_MODE_ASYNC | USART_MODE_RXEN
 			| USART_MODE_TXEN | USART_MODE_8DBIT
-			| USART_MODE_NPAR);
+			| USART_MODE_NPAR | USART_MODE_HDUPLEX);
 
 	SetupHardware();
 	proto_init();
@@ -278,7 +278,7 @@ void SetupHardware(void)
 void proto_target_baud(uint32_t rate) {
 	usart_init(rate,
 		USART_MODE_ASYNC | USART_MODE_RXEN | USART_MODE_TXEN
-		| USART_MODE_8DBIT | USART_MODE_NPAR);
+		| USART_MODE_8DBIT | USART_MODE_NPAR | USART_MODE_HDUPLEX);
 }
 
 /** Event handler for the library USB Connection event. */
