@@ -61,17 +61,17 @@ struct fifo_t {
 	/*! FIFO consumer event handler */
 	void (*consumer_evth)(struct fifo_t* const fifo, uint8_t events);
 
-	uint8_t* buffer;	/*!< Buffer storage location */
-	uint8_t	total_sz;	/*!< Buffer total size */
-	uint8_t stored_sz;	/*!< Buffer usage size */
-	uint8_t read_ptr;	/*!< Read pointer location */
-	uint8_t write_ptr;	/*!< Write pointer location */
+	volatile uint8_t* buffer;	/*!< Buffer storage location */
+	uint8_t	total_sz;		/*!< Buffer total size */
+	volatile uint8_t stored_sz;	/*!< Buffer usage size */
+	volatile uint8_t read_ptr;	/*!< Read pointer location */
+	volatile uint8_t write_ptr;	/*!< Write pointer location */
 
-	uint8_t producer_evtm;	/*!< Producer event mask */
-	uint8_t consumer_evtm;	/*!< Consumer event mask */
+	uint8_t producer_evtm;		/*!< Producer event mask */
+	uint8_t consumer_evtm;		/*!< Consumer event mask */
 
-	void* producer_data;	/*!< Producer data pointer */
-	void* consumer_data;	/*!< Consumer data pointer */
+	void* producer_data;		/*!< Producer data pointer */
+	void* consumer_data;		/*!< Consumer data pointer */
 };
 
 /*!
@@ -97,7 +97,7 @@ static void fifo_empty(struct fifo_t* const fifo) {
  * Initialise the buffer
  */
 static void fifo_init(struct fifo_t* const fifo,
-		uint8_t* buffer, uint8_t sz) {
+		volatile uint8_t* buffer, uint8_t sz) {
 	fifo_empty(fifo);
 	fifo->buffer = buffer;
 	fifo->total_sz = sz;
